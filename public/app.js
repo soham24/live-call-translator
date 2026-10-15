@@ -9,9 +9,9 @@ const $ = (s) => document.querySelector(s);
 // ---------- languages ----------
 // rec = speech recognition code, tr = translation code, tts = browser voice lang, gtts = Google voice lang
 const LANGS = {
-  'zh-CN': { label: 'Mandarin – Mainland (简体)', rec: 'zh-CN', tr: 'zh-CN', tts: 'zh-CN', gtts: 'zh-CN' },
-  'zh-TW': { label: 'Mandarin – Taiwan (繁體)', rec: 'zh-TW', tr: 'zh-TW', tts: 'zh-TW', gtts: 'zh-TW' },
-  'yue':   { label: 'Cantonese – Hong Kong (粵語)', rec: 'zh-HK', tr: 'zh-TW', tts: 'zh-HK', gtts: 'yue' },
+  'zh-CN': { label: 'Mandarin · Mainland', rec: 'zh-CN', tr: 'zh-CN', tts: 'zh-CN', gtts: 'zh-CN' },
+  'zh-TW': { label: 'Mandarin · Taiwan', rec: 'zh-TW', tr: 'zh-TW', tts: 'zh-TW', gtts: 'zh-TW' },
+  'yue':   { label: 'Cantonese · Hong Kong', rec: 'zh-HK', tr: 'zh-TW', tts: 'zh-HK', gtts: 'yue' },
 };
 
 // ---------- storage ----------
@@ -132,7 +132,8 @@ function addMessage(who, { en = '', zh = '' }) {
   const enEl = holder.appendChild(el('div', 'en', en));
   const zhEl = holder.appendChild(el('div', 'zh', zh));
   zhEl.lang = 'zh';
-  box.appendChild(m);
+  // keep the caller's in-progress bubble as the last item
+  box.insertBefore(m, interimEl?.parentNode === box ? interimEl : null);
   if (nearBottom) box.scrollTop = box.scrollHeight;
 
   return {
@@ -177,17 +178,63 @@ let rec = null;
 let listening = false; // user wants mic on
 let suspended = false; // temporarily paused while we play audio
 let running = false;   // recognizer actually started
+let micBlocked = false;
 
 function setMicStatus() {
-  const s = $('#micStatus');
-  s.className = 'pill';
-  if (playingNow) { s.textContent = '🔊 Playing – mic paused'; s.classList.add('playing'); }
-  else if (listening && running) { s.textContent = '● Listening'; s.classList.add('listening'); }
-  else if (listening) { s.textContent = 'Starting mic…'; }
-  else { s.textContent = 'Mic off'; }
-  $('#listenBtn').classList.toggle('on', listening);
-  $('#listenBtn').setAttribute('aria-pressed', String(listening));
+  let state, text;
+  if (micBlocked) { state = 'blocked'; text = 'Mic blocked'; }
+  else if (playingNow && listening) { state = 'paused'; text = 'Paused while playing'; }
+  else if (listening && running) { state = 'listening'; text = 'Listening'; }
+  else if (listening) { state = 'starting'; text = 'Starting mic…'; }
+  else { state = 'off'; text = 'Mic off'; }
+  const btn = $('#listenBtn');
+  btn.dataset.state = state;
+  btn.setAttribute('aria-pressed', String(listening));
+  $('#micStatus').textContent = text;
   $('#listenLabel').textContent = listening ? 'Stop listening' : 'Start listening';
+  // don't meter our own playback while the mic is paused
+  if (state === 'listening' || state === 'starting') startLevelMeter(); else stopLevelMeter();
+}
+
+// ---------- mic level meter (drives the pulsing ring on the listen button) ----------
+let meter = null; // { stream, ctx, raf }
+
+async function startLevelMeter() {
+  if (meter || !navigator.mediaDevices?.getUserMedia) return;
+  meter = {};
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!meter) { stream.getTracks().forEach((t) => t.stop()); return; } // stopped while waiting
+    const ctx = new AudioContext();
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 512;
+    ctx.createMediaStreamSource(stream).connect(analyser);
+    const buf = new Uint8Array(analyser.fftSize);
+    const btn = $('#listenBtn');
+    let level = 0;
+    const tick = () => {
+      analyser.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (const v of buf) sum += (v - 128) ** 2;
+      const rms = Math.sqrt(sum / buf.length) / 128;
+      level = Math.max(Math.min(rms * 4, 1), level * 0.85); // fast attack, slow release
+      btn.style.setProperty('--level', level.toFixed(3));
+      meter.raf = requestAnimationFrame(tick);
+    };
+    Object.assign(meter, { stream, ctx });
+    tick();
+  } catch {
+    meter = null; // the meter is cosmetic; recognition reports real mic errors
+  }
+}
+
+function stopLevelMeter() {
+  if (!meter) return;
+  cancelAnimationFrame(meter.raf);
+  meter.stream?.getTracks().forEach((t) => t.stop());
+  meter.ctx?.close();
+  meter = null;
+  $('#listenBtn').style.setProperty('--level', 0);
 }
 
 function buildRecognizer() {
@@ -201,6 +248,7 @@ function buildRecognizer() {
     if (e.error === 'no-speech' || e.error === 'aborted') return;
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       listening = false;
+      micBlocked = true;
       banner('Microphone access was blocked. Click the 🔒 icon in the address bar → allow Microphone, then reload.');
     } else if (e.error === 'network') {
       toast('Speech service network error – retrying…');
@@ -241,6 +289,7 @@ $('#listenBtn').onclick = () => {
     return;
   }
   listening = !listening;
+  micBlocked = false;
   if (listening) { banner(''); startRecognizer(); }
   else { stopRecognizer(); hideInterim(); }
   setMicStatus();
@@ -266,11 +315,32 @@ function onResult(e) {
   showInterim(interim);
 }
 
+// the caller's sentence in progress, shown as the last bubble in the transcript
+let interimEl = null;
+
+function interimBubble() {
+  if (!interimEl) {
+    interimEl = el('div', 'msg them interim');
+    interimEl.setAttribute('aria-hidden', 'true'); // screen readers get the final line instead
+    interimEl.appendChild(el('div', 'meta', 'Caller · speaking'));
+    interimEl.appendChild(el('div', 'en')).appendChild(el('span', 'typing'));
+    interimEl.appendChild(el('div', 'zh')).lang = 'zh';
+  }
+  const box = $('#transcript');
+  if (box.lastElementChild !== interimEl) {
+    $('#emptyHint')?.remove();
+    const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+    box.appendChild(interimEl);
+    if (nearBottom) box.scrollTop = box.scrollHeight;
+  }
+  return interimEl;
+}
+
 function showInterim(text) {
   interimText = text.trim();
   if (!interimText) { hideInterim(); return; }
-  $('#live').classList.remove('hidden');
-  $('#liveZh').textContent = interimText;
+  const bubble = interimBubble();
+  bubble.querySelector('.zh').textContent = interimText;
   // throttle: translate at most every 700ms while they're still talking
   const wait = Math.max(0, 700 - (Date.now() - lastInterimTr));
   clearTimeout(interimTimer);
@@ -281,7 +351,12 @@ function showInterim(text) {
     if (!src) return;
     try {
       const en = await toEnglish(src);
-      if (seq === interimSeq && interimText) $('#liveEn').textContent = en;
+      if (seq === interimSeq && interimText && interimEl) {
+        const box = $('#transcript');
+        const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+        interimEl.querySelector('.en').textContent = en;
+        if (nearBottom) box.scrollTop = box.scrollHeight;
+      }
     } catch {}
   }, wait);
 }
@@ -290,9 +365,8 @@ function hideInterim() {
   interimText = '';
   interimSeq++;
   clearTimeout(interimTimer);
-  $('#live').classList.add('hidden');
-  $('#liveZh').textContent = '';
-  $('#liveEn').textContent = '';
+  interimEl?.remove();
+  interimEl = null;
 }
 
 // if the recognizer ends mid-sentence, keep what we had rather than losing it
@@ -381,6 +455,13 @@ function chunkText(text, max) {
   return out.map((s) => s.trim()).filter(Boolean);
 }
 
+// progress: 0..1, or null when the engine can't tell us (bar animates instead)
+function setPlayProgress(p) {
+  const fill = $('#playbarFill');
+  fill.classList.toggle('indeterminate', p == null);
+  fill.style.width = p == null ? '' : Math.round(Math.min(p, 1) * 100) + '%';
+}
+
 function speakBrowser(text, token) {
   return new Promise((resolve, reject) => {
     const voice = voices.find((v) => v.voiceURI === settings.voice) || chineseVoices()[0];
@@ -389,13 +470,20 @@ function speakBrowser(text, token) {
       return;
     }
     const parts = chunkText(text, 160);
+    const total = parts.reduce((n, p) => n + p.length, 0) || 1;
+    let done = 0;
     stopCurrent = () => { speechSynthesis.cancel(); resolve(); };
     parts.forEach((p, i) => {
       const u = new SpeechSynthesisUtterance(p);
       u.voice = voice;
       u.lang = voice.lang;
       u.rate = settings.rate;
-      if (i === parts.length - 1) u.onend = () => resolve();
+      u.onboundary = (e) => { if (token === playToken) setPlayProgress((done + e.charIndex) / total); };
+      u.onend = () => {
+        done += p.length;
+        if (token === playToken) setPlayProgress(done / total);
+        if (i === parts.length - 1) resolve();
+      };
       u.onerror = (e) => (e.error === 'interrupted' || e.error === 'canceled') ? resolve() : reject(new Error('Voice error: ' + e.error));
       speechSynthesis.speak(u);
     });
@@ -403,12 +491,16 @@ function speakBrowser(text, token) {
 }
 
 async function speakGoogle(text, token) {
-  for (const part of chunkText(text, 180)) {
+  const parts = chunkText(text, 180);
+  for (const [i, part] of parts.entries()) {
     if (token !== playToken) return;
     await new Promise((resolve, reject) => {
       const a = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${L().gtts}&q=${encodeURIComponent(part)}`);
       a.playbackRate = settings.rate;
       a.preservesPitch = true;
+      a.ontimeupdate = () => {
+        if (token === playToken && a.duration) setPlayProgress((i + a.currentTime / a.duration) / parts.length);
+      };
       a.onended = resolve;
       a.onerror = () => reject(new Error('Google online voice failed to load – try the Browser voice.'));
       stopCurrent = () => { a.pause(); resolve(); };
@@ -423,7 +515,8 @@ function stopSpeaking() {
   if ('speechSynthesis' in window) speechSynthesis.cancel();
 }
 
-async function speak(zh) {
+// label = what to show in the playback bar (usually the English phrase)
+async function speak(zh, label = zh) {
   zh = (zh || '').trim();
   if (!zh) { toast('Nothing to play yet'); return; }
   stopSpeaking();
@@ -434,6 +527,9 @@ async function speak(zh) {
   playingNow = true;
   if (settings.muteWhilePlaying && listening) { suspended = true; flushInterim(); stopRecognizer(); }
   setMicStatus();
+  $('#playbarText').textContent = label;
+  setPlayProgress(null);
+  $('#playbar').hidden = false;
 
   try {
     // no Chinese voice installed in this browser -> fall back to the free Google voice
@@ -446,7 +542,8 @@ async function speak(zh) {
     if (id === speakId) {
       playingNow = false;
       stopCurrent = null;
-      document.querySelectorAll('.preset.playing').forEach((p) => p.classList.remove('playing'));
+      $('#playbar').hidden = true;
+      document.querySelectorAll('.tile.playing').forEach((p) => p.classList.remove('playing'));
       // short gap so the tail of our audio isn't picked up
       setTimeout(() => {
         if (playingNow) return;
@@ -461,22 +558,27 @@ async function speak(zh) {
 
 async function playPhrase(en, zh) {
   addMessage('me', { en, zh });
-  await speak(zh);
+  await speak(zh, en);
 }
 
 $('#stopBtn').onclick = stopSpeaking;
 
-// ---------- quick type & speak ----------
+// ---------- reply box (type English -> play Chinese) ----------
 const quickEn = $('#quickEn');
 const quickZh = $('#quickZh');
 let quickSeq = 0;
 let quickTimer;
 
+function syncComposer() {
+  $('#composerPreview').hidden = !quickEn.value.trim() && !quickZh.textContent.trim();
+  autoGrow(quickEn, 160);
+}
+
 async function quickTranslate() {
   const en = quickEn.value.trim();
   const seq = ++quickSeq;
-  if (!en) { quickZh.textContent = ''; $('#quickBack').textContent = ''; return ''; }
-  quickZh.textContent = '…';
+  if (!en) { quickZh.textContent = ''; $('#quickBack').textContent = ''; syncComposer(); return ''; }
+  quickZh.classList.add('loading');
   try {
     const zh = await toChinese(en);
     if (seq !== quickSeq) return zh;
@@ -484,13 +586,18 @@ async function quickTranslate() {
     zhBackToEnglish(zh).then((b) => { if (seq === quickSeq) $('#quickBack').textContent = '↩ Means: ' + b; }).catch(() => {});
     return zh;
   } catch (e) {
-    quickZh.textContent = '';
+    if (seq === quickSeq) quickZh.textContent = '';
     toast('Translation failed – check internet');
     return '';
+  } finally {
+    if (seq === quickSeq) quickZh.classList.remove('loading');
+    syncComposer();
   }
 }
 
 quickEn.addEventListener('input', () => {
+  syncComposer();
+  $('#quickBack').textContent = '';
   clearTimeout(quickTimer);
   quickTimer = setTimeout(quickTranslate, 700);
 });
@@ -502,26 +609,33 @@ quickEn.addEventListener('keydown', async (e) => {
     if (e.ctrlKey && zh) playPhrase(quickEn.value.trim(), zh);
   }
 });
+quickZh.addEventListener('input', () => { $('#quickBack').textContent = ''; });
 $('#quickTranslateBtn').onclick = () => { clearTimeout(quickTimer); quickTranslate(); };
 $('#quickPlayBtn').onclick = async () => {
   const en = quickEn.value.trim();
   let zh = quickZh.textContent.trim();
-  if (en && (!zh || zh === '…')) zh = await quickTranslate();
+  if (en && (!zh || quickZh.classList.contains('loading'))) zh = await quickTranslate();
   if (zh) playPhrase(en || '(typed Chinese)', zh);
+  else if (!en) { toast('Type a reply first'); quickEn.focus(); }
 };
 $('#quickSaveBtn').onclick = async () => {
   const en = quickEn.value.trim();
-  if (!en) { toast('Type a phrase first'); return; }
+  if (!en) { toast('Type a phrase first'); quickEn.focus(); return; }
   let zh = quickZh.textContent.trim();
-  if (!zh || zh === '…') zh = await quickTranslate();
+  if (!zh || quickZh.classList.contains('loading')) zh = await quickTranslate();
   presets.push({ id: uid(), en, zh, zhLang: settings.lang, back: '' });
   savePresets();
   renderPresets();
   toast('Saved as phrase #' + presets.length);
 };
 
-// ---------- presets ----------
-function autoGrow(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; }
+// ---------- phrases ----------
+let editingPresets = false;
+
+function autoGrow(t, max = Infinity) {
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight + 2, max) + 'px';
+}
 
 async function translatePreset(p, card) {
   const en = p.en.trim();
@@ -533,6 +647,8 @@ async function translatePreset(p, card) {
     p.zhLang = settings.lang;
     savePresets();
     if (zhBox) { zhBox.value = p.zh; autoGrow(zhBox); }
+    const tileZh = card?.querySelector('.tile-zh');
+    if (tileZh) tileZh.textContent = p.zh;
     p.back = await zhBackToEnglish(p.zh);
     savePresets();
     const b = card?.querySelector('.back');
@@ -542,66 +658,105 @@ async function translatePreset(p, card) {
   }
 }
 
+async function playPreset(i) {
+  const p = presets[i];
+  if (!p || !p.en.trim()) return;
+  const card = document.querySelector(`[data-id="${p.id}"]`);
+  if (!p.zh) await translatePreset(p, card);
+  if (!p.zh) return;
+  document.querySelectorAll('.tile.playing').forEach((t) => t.classList.remove('playing'));
+  card?.classList.add('playing');
+  playPhrase(p.en, p.zh);
+}
+
 function renderPresets() {
   const box = $('#presets');
   box.innerHTML = '';
-  presets.forEach((p, i) => {
-    const card = el('div', 'preset');
-    card.dataset.id = p.id;
+  box.classList.toggle('editing', editingPresets);
+  document.body.classList.toggle('editing-presets', editingPresets);
+  $('#editPresetsBtn').setAttribute('aria-pressed', String(editingPresets));
+  $('#editPresetsBtn').textContent = editingPresets ? '✓ Done' : '✎ Edit';
+  $('#presetHint').innerHTML = editingPresets
+    ? 'Edit the English and the Chinese updates automatically. Check the <b>↩ Means</b> line before a call.'
+    : 'Tap a phrase to play it, or press <kbd>1</kbd>–<kbd>9</kbd>.';
+  if (!presets.length) {
+    box.appendChild(el('p', 'empty-phrases', 'No phrases yet. Click Edit → ＋ Add, or save one from the reply box.'));
+    return;
+  }
+  presets.forEach((p, i) => box.appendChild(editingPresets ? presetEditor(p, i) : presetTile(p, i)));
+}
 
-    const top = el('div', 'preset-top');
-    top.appendChild(el('span', 'num', i < 9 ? String(i + 1) : '•'));
-    const play = el('button', 'btn btn-primary btn-small', '▶ Play');
-    play.onclick = async () => {
-      if (!p.zh) await translatePreset(p, card);
-      card.classList.add('playing');
-      playPhrase(p.en, p.zh);
-    };
-    top.appendChild(play);
-    top.appendChild(el('span', 'spacer'));
-    const up = el('button', 'icon-btn', '↑'); up.title = 'Move up';
-    up.onclick = () => { if (i > 0) { [presets[i - 1], presets[i]] = [presets[i], presets[i - 1]]; savePresets(); renderPresets(); } };
-    const re = el('button', 'icon-btn', '↻'); re.title = 'Re-translate from English';
-    re.onclick = () => translatePreset(p, card);
-    const del = el('button', 'icon-btn', '✕'); del.title = 'Delete';
-    del.onclick = () => {
-      if (!confirm('Delete this phrase?')) return;
-      presets = presets.filter((x) => x.id !== p.id);
-      savePresets(); renderPresets();
-    };
-    top.append(up, re, del);
+// call mode: one big button per phrase
+function presetTile(p, i) {
+  const item = el('div', 'tile');
+  item.setAttribute('role', 'listitem');
+  item.dataset.id = p.id;
+  const btn = el('button', 'tile-btn');
+  btn.title = p.en;
+  btn.setAttribute('aria-label', `${i < 9 ? 'Phrase ' + (i + 1) + ': ' : ''}${p.en}`);
+  btn.appendChild(el('span', 'tile-key', i < 9 ? String(i + 1) : ''));
+  btn.appendChild(el('span', 'tile-en', p.en || '(empty)'));
+  const zh = btn.appendChild(el('span', 'tile-zh', p.zh || 'Not translated yet'));
+  zh.lang = 'zh';
+  btn.onclick = () => playPreset(i);
+  item.appendChild(btn);
+  return item;
+}
 
-    const en = el('textarea', 'en');
-    en.rows = 1; en.value = p.en; en.placeholder = 'English phrase…';
-    let t;
-    en.addEventListener('input', () => {
-      autoGrow(en);
-      p.en = en.value; savePresets();
-      clearTimeout(t);
-      t = setTimeout(() => translatePreset(p, card), 800);
-    });
+// edit mode: text boxes, reorder, re-translate, delete
+function presetEditor(p, i) {
+  const card = el('div', 'preset');
+  card.setAttribute('role', 'listitem');
+  card.dataset.id = p.id;
 
-    const zh = el('textarea', 'zh');
-    zh.rows = 1; zh.lang = 'zh'; zh.value = p.zh; zh.placeholder = 'Chinese (auto-translated, editable)';
-    zh.addEventListener('input', () => { autoGrow(zh); p.zh = zh.value; p.back = ''; savePresets(); card.querySelector('.back').textContent = ''; });
+  const top = el('div', 'preset-top');
+  top.appendChild(el('span', 'num', i < 9 ? String(i + 1) : '•'));
+  top.appendChild(el('span', 'spacer'));
+  const up = el('button', 'icon-btn', '↑'); up.title = 'Move up'; up.setAttribute('aria-label', 'Move up');
+  up.disabled = i === 0;
+  up.onclick = () => { [presets[i - 1], presets[i]] = [presets[i], presets[i - 1]]; savePresets(); renderPresets(); };
+  const re = el('button', 'icon-btn', '↻'); re.title = 'Re-translate from English'; re.setAttribute('aria-label', 'Re-translate from English');
+  re.onclick = () => translatePreset(p, card);
+  const del = el('button', 'icon-btn', '✕'); del.title = 'Delete'; del.setAttribute('aria-label', 'Delete phrase');
+  del.onclick = () => {
+    if (!confirm('Delete this phrase?')) return;
+    presets = presets.filter((x) => x.id !== p.id);
+    savePresets(); renderPresets();
+  };
+  top.append(up, re, del);
 
-    const back = el('div', 'back', p.back ? '↩ Means: ' + p.back : '');
-
-    card.append(top, en, zh, back);
-    box.appendChild(card);
-    requestAnimationFrame(() => { autoGrow(en); autoGrow(zh); });
+  const en = el('textarea', 'en');
+  en.rows = 1; en.value = p.en; en.placeholder = 'English phrase…';
+  en.setAttribute('aria-label', 'English phrase');
+  let t;
+  en.addEventListener('input', () => {
+    autoGrow(en);
+    p.en = en.value; savePresets();
+    clearTimeout(t);
+    t = setTimeout(() => translatePreset(p, card), 800);
   });
+
+  const zh = el('textarea', 'zh');
+  zh.rows = 1; zh.lang = 'zh'; zh.value = p.zh; zh.placeholder = 'Chinese (auto-translated, editable)';
+  zh.setAttribute('aria-label', 'Chinese translation');
+  zh.addEventListener('input', () => { autoGrow(zh); p.zh = zh.value; p.back = ''; savePresets(); card.querySelector('.back').textContent = ''; });
+
+  const back = el('div', 'back', p.back ? '↩ Means: ' + p.back : '');
+
+  card.append(top, en, zh, back);
+  requestAnimationFrame(() => { autoGrow(en); autoGrow(zh); });
+  return card;
 }
 
 // translate any phrase whose Chinese is missing or is for a different dialect/script
 async function refreshPresetTranslations() {
   for (const p of presets) {
     if (p.en.trim() && (!p.zh || p.zhLang !== settings.lang)) {
-      await translatePreset(p, document.querySelector(`.preset[data-id="${p.id}"]`));
+      await translatePreset(p, document.querySelector(`[data-id="${p.id}"]`));
     } else if (p.zh && !p.back) {
       try {
         p.back = await zhBackToEnglish(p.zh);
-        const b = document.querySelector(`.preset[data-id="${p.id}"] .back`);
+        const b = document.querySelector(`[data-id="${p.id}"] .back`);
         if (b) b.textContent = '↩ Means: ' + p.back;
       } catch {}
     }
@@ -609,6 +764,12 @@ async function refreshPresetTranslations() {
   savePresets();
 }
 
+$('#editPresetsBtn').onclick = () => {
+  editingPresets = !editingPresets;
+  // drop phrases left empty while editing
+  if (!editingPresets) { presets = presets.filter((p) => p.en.trim()); savePresets(); }
+  renderPresets();
+};
 $('#addPresetBtn').onclick = () => {
   presets.push({ id: uid(), en: '', zh: '', zhLang: settings.lang, back: '' });
   savePresets(); renderPresets();
@@ -681,7 +842,7 @@ function initSettings() {
 
   $('#testVoiceBtn').onclick = async () => {
     const zh = await toChinese('Hello, this is a voice test.').catch(() => '你好，这是语音测试。');
-    speak(zh);
+    speak(zh, 'Voice test');
   };
 }
 
@@ -731,10 +892,7 @@ document.addEventListener('keydown', (e) => {
   const tag = document.activeElement?.tagName;
   if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
-  if (/^[1-9]$/.test(e.key)) {
-    const card = document.querySelectorAll('.preset')[Number(e.key) - 1];
-    card?.querySelector('.btn-primary')?.click();
-  }
+  if (/^[1-9]$/.test(e.key) && !editingPresets) playPreset(Number(e.key) - 1);
 });
 
 // ---------- boot ----------

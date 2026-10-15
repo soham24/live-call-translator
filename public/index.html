@@ -8,7 +8,7 @@
   <title>Live Call Translator</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body data-tab="transcript">
+<body data-tab="call">
   <a class="skip-link" href="#transcript">Skip to transcript</a>
 
   <header class="topbar">
@@ -25,24 +25,30 @@
         <span>Their language</span>
         <select id="langSelect"></select>
       </label>
-      <button id="listenBtn" class="btn btn-primary btn-lg" aria-pressed="false">
-        <span class="dot" aria-hidden="true"></span><span id="listenLabel">Start listening</span>
+      <button id="listenBtn" class="mic-btn" data-state="off" aria-pressed="false" aria-describedby="micStatus">
+        <span class="mic-ring" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </span>
+        <span class="mic-text">
+          <span id="listenLabel" class="mic-label">Start listening</span>
+          <span id="micStatus" class="mic-status">Mic off</span>
+        </span>
       </button>
-      <button id="settingsBtn" class="btn btn-ghost" aria-controls="settingsPanel" aria-expanded="false">⚙ Settings</button>
+    </div>
+
+    <div class="top-actions">
+      <button id="settingsBtn" class="btn btn-ghost" aria-controls="settingsPanel" aria-expanded="false"><span aria-hidden="true">⚙</span><span class="label">Settings</span></button>
     </div>
   </header>
 
   <div id="banner" class="banner hidden" role="alert"></div>
 
   <main class="layout" id="main">
-    <!-- LEFT: live transcript -->
-    <section class="panel transcript-panel" aria-labelledby="transcriptTitle">
+    <!-- LEFT: conversation (transcript + reply box) -->
+    <section class="panel call-panel" aria-labelledby="callTitle">
       <div class="panel-head">
-        <h2 id="transcriptTitle">Live transcript</h2>
-        <div class="status-row">
-          <span id="micStatus" class="pill">Mic off</span>
-          <span id="trStatus" class="pill pill-muted">Translator: –</span>
-        </div>
+        <h2 id="callTitle">Conversation</h2>
+        <span id="trStatus" class="pill">Translator: –</span>
         <div class="head-actions">
           <button id="copyBtn" class="btn btn-small btn-ghost">Copy</button>
           <button id="downloadBtn" class="btn btn-small btn-ghost">Save .txt</button>
@@ -55,49 +61,57 @@
           <p><b>1.</b> Put the phone call on speaker next to your laptop.</p>
           <p><b>2.</b> Click <b>Start listening</b> and allow microphone access.</p>
           <p><b>3.</b> What they say appears here in English, live.</p>
-          <p><b>4.</b> Use the phrases to answer. They play in Chinese through your laptop speaker.</p>
+          <p><b>4.</b> Tap a phrase or type a reply below. It plays in Chinese through your laptop speaker.</p>
         </div>
       </div>
 
-      <div id="live" class="live hidden">
-        <div class="live-label">Hearing…</div>
-        <div id="liveZh" class="live-zh" lang="zh"></div>
-        <div id="liveEn" class="live-en"></div>
+      <div id="composer" class="composer">
+        <div id="composerPreview" class="composer-preview" hidden>
+          <div id="quickZh" class="zh-out" lang="zh" contenteditable="true" role="textbox" aria-label="Chinese translation (editable)" data-placeholder="Chinese translation"></div>
+          <div id="quickBack" class="back"></div>
+        </div>
+        <div class="composer-row">
+          <label class="sr-only" for="quickEn">Reply in English</label>
+          <textarea id="quickEn" rows="1" placeholder="Type a reply in English…"></textarea>
+          <button id="quickPlayBtn" class="btn btn-primary composer-play" title="Translate and play (Ctrl+Enter)">▶ Play</button>
+        </div>
+        <div class="composer-tools">
+          <button id="quickTranslateBtn" class="btn btn-small btn-ghost">Translate</button>
+          <button id="quickSaveBtn" class="btn btn-small btn-ghost">＋ Save as phrase</button>
+          <span class="composer-hint"><kbd>Enter</kbd> translate · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> play</span>
+        </div>
       </div>
     </section>
 
-    <!-- RIGHT: speak -->
-    <section class="panel speak-panel" aria-labelledby="speakTitle">
-      <div class="quick">
-        <div class="panel-head"><h2 id="speakTitle">Type &amp; speak</h2></div>
-        <label class="sr-only" for="quickEn">English to translate</label>
-        <textarea id="quickEn" rows="2" placeholder="Type English here…  (Enter = translate, Ctrl+Enter = translate & play)"></textarea>
-        <div id="quickZh" class="zh-out" lang="zh" contenteditable="true" role="textbox" aria-label="Chinese translation (editable)" data-placeholder="Chinese translation appears here (you can edit it)"></div>
-        <div id="quickBack" class="back"></div>
-        <div class="row">
-          <button id="quickTranslateBtn" class="btn btn-ghost">Translate</button>
-          <button id="quickPlayBtn" class="btn btn-primary">▶ Play to caller</button>
-          <button id="quickSaveBtn" class="btn btn-ghost">＋ Save as phrase</button>
-          <button id="stopBtn" class="btn btn-danger" title="Esc">■ Stop</button>
-        </div>
-      </div>
-
-      <div class="panel-head presets-head">
-        <h2>Saved phrases</h2>
+    <!-- RIGHT: phrases -->
+    <section class="panel phrases-panel" aria-labelledby="phrasesTitle">
+      <div class="panel-head">
+        <h2 id="phrasesTitle">Phrases</h2>
         <div class="head-actions">
-          <button id="addPresetBtn" class="btn btn-small btn-ghost">＋ Add</button>
-          <button id="exportBtn" class="btn btn-small btn-ghost">Export</button>
-          <label class="btn btn-small btn-ghost">Import<input id="importInput" type="file" accept=".json" class="sr-only" /></label>
+          <button id="editPresetsBtn" class="btn btn-small btn-ghost" aria-pressed="false">✎ Edit</button>
+          <button id="addPresetBtn" class="btn btn-small btn-ghost edit-only">＋ Add</button>
+          <button id="exportBtn" class="btn btn-small btn-ghost edit-only">Export</button>
+          <label class="btn btn-small btn-ghost edit-only">Import<input id="importInput" type="file" accept=".json" class="sr-only" /></label>
         </div>
       </div>
-      <p class="hint">Press keys <kbd>1</kbd>–<kbd>9</kbd> to play a phrase (when you're not typing). <kbd>Esc</kbd> stops playback.</p>
-      <div id="presets" class="presets"></div>
+      <p class="hint" id="presetHint">Tap a phrase to play it, or press <kbd>1</kbd>–<kbd>9</kbd>.</p>
+      <div id="presets" class="presets" role="list"></div>
     </section>
+
+    <!-- playback bar: shown while the app is speaking to the caller -->
+    <div id="playbar" class="playbar" role="status" hidden>
+      <div class="playbar-info">
+        <span class="playbar-label">Playing to caller</span>
+        <span id="playbarText" class="playbar-text"></span>
+        <div class="playbar-track"><span id="playbarFill" class="playbar-fill"></span></div>
+      </div>
+      <button id="stopBtn" class="btn btn-danger btn-lg">■ Stop <kbd>Esc</kbd></button>
+    </div>
   </main>
 
   <nav class="tabbar" aria-label="Sections">
-    <button class="tab" data-tab="transcript" aria-pressed="true">Transcript</button>
-    <button class="tab" data-tab="speak" aria-pressed="false">Speak</button>
+    <button class="tab" data-tab="call" aria-pressed="true">Conversation</button>
+    <button class="tab" data-tab="phrases" aria-pressed="false">Phrases</button>
   </nav>
 
   <div id="scrim" class="scrim" hidden></div>
