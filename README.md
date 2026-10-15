@@ -7,17 +7,25 @@ A zero-dependency web app for phone calls on speaker with someone who speaks Chi
 
 It runs entirely in the browser using free services. There are no API keys, accounts or build steps.
 
-**Live demo:** https://live-call-translator-soham.netlify.app (open in Chrome or Edge)
+**Live demo:** https://live-call-translator-soham.netlify.app (open in Chrome or Edge). Add `#demo` to the URL to see a sample conversation.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
+  <img alt="Live Call Translator showing a translated conversation on the left and saved phrase tiles on the right" src="docs/screenshot-light.png">
+</picture>
 
 ## Features
 
 - Live Chinese speech recognition with a rolling English translation while the caller is still talking
 - Mandarin (Mainland / Taiwan) and Cantonese (Hong Kong)
-- Saved phrases you can play with one key press (`1`–`9`), with reorder, edit, and JSON export/import
+- Saved phrases as big tap-to-play tiles (or keys `1`–`9`), with an edit mode for reordering and JSON export/import
+- A mic button that shows what the app is doing (listening, paused while playing, blocked) and pulses with your mic level
+- A playback bar with progress and a large Stop button (`Esc`)
 - A "↩ Means:" back-translation under every phrase, so you can check the meaning before you play it
 - Browser voices (Edge's "Natural" voices sound best) or the free Google online voice as a fallback
 - The mic pauses automatically while the app is speaking, so it doesn't transcribe itself
 - Copy the call transcript or save it as `.txt`
+- Works on phones, follows your light/dark system setting, and supports keyboard and screen-reader use
 
 ## Requirements
 
@@ -55,7 +63,7 @@ The app is a static site in `public/`, so any static host works.
 1. Put the phone on speaker next to your laptop. The laptop mic hears the caller, and the phone mic hears the laptop speaker.
 2. Pick the caller's language (Mandarin Mainland / Taiwan, or Cantonese).
 3. Click **Start listening** and allow the microphone.
-4. Reply with saved phrases (keys `1`–`9`) or **Type & speak**. `Enter` translates, `Ctrl+Enter` translates and plays, `Esc` stops playback.
+4. Reply by tapping a phrase tile (or keys `1`–`9`), or type in the reply box under the transcript. `Enter` translates, `Ctrl+Enter` translates and plays, `Esc` stops playback.
 5. **Save .txt** keeps a transcript of the call.
 
 ### Tips
@@ -63,7 +71,7 @@ The app is a static site in `public/`, so any static host works.
 - Try **Settings → Test voice** before the call.
 - Keep "Pause mic while playing" on so the app doesn't transcribe its own Chinese audio.
 - The listener is set to Chinese, so stay quiet while the caller talks. Your English would come out as nonsense Chinese text.
-- Phrases are stored in your browser's `localStorage`. Use **Export / Import** to back them up or move them to another browser.
+- Phrases are stored in your browser's `localStorage`. Click **Edit**, then **Export / Import**, to back them up or move them to another browser.
 
 ## How it works
 
@@ -82,7 +90,9 @@ The Google Translate and voice endpoints are unofficial and can be rate-limited 
 ├── public/            # The app (what gets deployed)
 │   ├── index.html
 │   ├── app.js         # Recognition, translation, speech, phrases, settings
-│   └── style.css
+│   ├── style.css      # Theme tokens (dark + light) and layout
+│   ├── favicon.svg, apple-touch-icon.png, og.png
+├── docs/              # README screenshots
 ├── scripts/
 │   ├── start.bat      # Windows launcher
 │   └── start.sh       # macOS / Linux launcher
@@ -93,7 +103,7 @@ The Google Translate and voice endpoints are unofficial and can be rate-limited 
 
 ## Privacy
 
-Audio is processed by your browser's speech recognition service (Google for Chrome, Microsoft for Edge). Recognised text and your typed phrases are sent to the translation services listed above. Nothing is sent to any server run by this project. Settings and phrases stay in your browser.
+Audio is processed by your browser's speech recognition service (Google for Chrome, Microsoft for Edge). Recognised text and your typed phrases are sent to the translation services listed above. The interface font loads from Google Fonts. Nothing is sent to any server run by this project. Settings and phrases stay in your browser.
 
 ## Contributing
 

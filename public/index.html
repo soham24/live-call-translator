@@ -6,14 +6,36 @@
   <!-- no-referrer lets the free Google online voice load from this page -->
   <meta name="referrer" content="no-referrer" />
   <title>Live Call Translator</title>
+  <meta name="description" content="Free, in-browser translator for phone calls with Chinese speakers. Hear Mandarin or Cantonese as live English text, and reply in English that plays back as Chinese speech." />
+  <meta name="theme-color" content="#0e1116" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f3f5f8" media="(prefers-color-scheme: light)" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Live Call Translator" />
+  <meta property="og:description" content="Hear Chinese as live English text. Reply in English, and it plays back as Chinese speech. Free, no sign-up." />
+  <meta property="og:url" content="https://live-call-translator-soham.netlify.app/" />
+  <meta property="og:image" content="https://live-call-translator-soham.netlify.app/og.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="style.css" />
+  <script>
+    // apply a saved light/dark choice before first paint
+    try { const t = JSON.parse(localStorage.getItem('lct.settings') || '{}').theme; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}
+  </script>
 </head>
 <body data-tab="call">
   <a class="skip-link" href="#transcript">Skip to transcript</a>
 
   <header class="topbar">
     <div class="brand">
-      <span class="logo" aria-hidden="true">译</span>
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="16" fill="var(--accent)"/>
+        <path d="M16 20a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H31l-9 8v-8a6 6 0 0 1-6-6z" fill="#fff"/>
+        <g fill="var(--accent)"><rect x="21" y="23" width="4" height="8" rx="2"/><rect x="27" y="19" width="4" height="16" rx="2"/><rect x="33" y="21" width="4" height="12" rx="2"/><rect x="39" y="24" width="4" height="6" rx="2"/></g>
+      </svg>
       <div>
         <h1>Live Call Translator</h1>
         <p class="sub">They speak Chinese → you read English · You type English → they hear Chinese</p>
@@ -121,6 +143,7 @@
       <button id="settingsClose" class="icon-btn" aria-label="Close settings">✕</button>
     </div>
     <div class="drawer-body">
+      <p class="drawer-section">Voice</p>
       <label class="field">
         <span>Voice engine</span>
         <select id="engineSelect">
@@ -136,15 +159,25 @@
         <span>Speed <b id="rateVal"></b></span>
         <input id="rateInput" type="range" min="0.6" max="1.3" step="0.05" />
       </label>
-      <label class="field">
-        <span>Transcript text size <b id="fontVal"></b></span>
-        <input id="fontInput" type="range" min="16" max="40" step="1" />
-      </label>
       <label class="check">
         <input id="muteChk" type="checkbox" />
         <span>Pause mic while playing Chinese (prevents echo)</span>
       </label>
-      <button id="testVoiceBtn" class="btn btn-ghost">▶ Test voice</button>
+      <button id="testVoiceBtn" class="btn">▶ Test voice</button>
+
+      <p class="drawer-section">Display</p>
+      <label class="field">
+        <span>Theme</span>
+        <select id="themeSelect">
+          <option value="system">Match system</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Transcript text size <b id="fontVal"></b></span>
+        <input id="fontInput" type="range" min="16" max="40" step="1" />
+      </label>
     </div>
   </aside>
 

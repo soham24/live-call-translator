@@ -21,7 +21,7 @@ const store = {
 };
 
 const settings = Object.assign(
-  { lang: 'zh-CN', engine: 'browser', voice: '', rate: 0.9, muteWhilePlaying: true, fontSize: 22 },
+  { lang: 'zh-CN', engine: 'browser', voice: '', rate: 0.9, muteWhilePlaying: true, fontSize: 22, theme: 'system' },
   store.get('settings', {})
 );
 const saveSettings = () => store.set('settings', settings);
@@ -836,6 +836,15 @@ function initSettings() {
   applyFont();
   font.oninput = () => { settings.fontSize = Number(font.value); applyFont(); saveSettings(); };
 
+  const theme = $('#themeSelect');
+  const applyTheme = () => {
+    if (settings.theme === 'light' || settings.theme === 'dark') document.documentElement.dataset.theme = settings.theme;
+    else delete document.documentElement.dataset.theme;
+  };
+  theme.value = settings.theme;
+  applyTheme();
+  theme.onchange = () => { settings.theme = theme.value; applyTheme(); saveSettings(); };
+
   const mute = $('#muteChk');
   mute.checked = settings.muteWhilePlaying;
   mute.onchange = () => { settings.muteWhilePlaying = mute.checked; saveSettings(); };
@@ -900,6 +909,18 @@ initSettings();
 renderPresets();
 setMicStatus();
 refreshPresetTranslations();
+
+// open the page with #demo to see a sample conversation (handy for screenshots and UI work)
+if (location.hash === '#demo') {
+  [
+    ['them', '您好，请问是哪位？', 'Hello, who is this please?'],
+    ['me', '请您说得慢一点。', 'Please speak a little more slowly.'],
+    ['them', '好的。您的订单下周三从深圳发货。', 'OK. Your order ships from Shenzhen next Wednesday.'],
+    ['me', '请问您可以把这些信息通过电子邮件发给我吗？', 'Could you please send this information to me by email?'],
+  ].forEach(([who, zh, en]) => addMessage(who, { zh, en }));
+  showInterim('没问题，我今天下午发给您');
+  interimEl.querySelector('.en').textContent = "No problem, I'll send it to you this afternoon";
+}
 
 if (!SR) {
   banner('⚠ Speech recognition is not available in this browser. Open this page in <b>Google Chrome</b> or <b>Microsoft Edge</b>.');
