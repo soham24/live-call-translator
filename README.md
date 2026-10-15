@@ -7,7 +7,7 @@ A zero-dependency web app for phone calls on speaker with someone who speaks Chi
 
 It runs entirely in the browser using free services. There are no API keys, accounts or build steps.
 
-**Live demo:** https://live-call-translator-soham.netlify.app (open in Chrome or Edge). Add `#demo` to the URL to see a sample conversation.
+**Live demo:** https://live-call-translator.netlify.app (open in Chrome or Edge). Add `#demo` to the URL to see a sample conversation.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
