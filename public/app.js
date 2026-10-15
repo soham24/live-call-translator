@@ -137,6 +137,7 @@ function addMessage(who, { en = '', zh = '' }) {
   if (nearBottom) box.scrollTop = box.scrollHeight;
 
   return {
+    el: m,
     setEnglish(text, pending = false) {
       entry.en = pending ? '' : text;
       enEl.textContent = text;
@@ -379,12 +380,44 @@ async function addTheirLine(zh) {
   hideInterim();
   const msg = addMessage('them', { zh });
   msg.setEnglish('translating…', true);
+  let en = '';
+  // the newest caller line always shows its quick replies
+  document.querySelectorAll('.msg.them.latest').forEach((m) => m.classList.remove('latest'));
+  msg.el.classList.add('latest');
+  const actions = msg.el.appendChild(el('div', 'line-actions'));
+  const again = actions.appendChild(el('button', 'chip-btn', '↻ Ask to repeat'));
+  again.title = 'Play your "please repeat that" phrase';
+  again.onclick = askToRepeat;
+  const check = actions.appendChild(el('button', 'chip-btn', '✓ Confirm'));
+  check.title = 'Read this back to the caller in Chinese: "Did you say …?"';
+  check.onclick = () => confirmLine(zh, en);
   try {
-    const en = await toEnglish(zh);
+    en = await toEnglish(zh);
     msg.setEnglish(en);
     announce('Caller: ' + en);
   }
   catch (e) { msg.setEnglish('[translation failed – check internet]'); console.warn(e); }
+}
+
+// ---------- quick replies on a caller line ----------
+const REPEAT_EN = 'Sorry, could you please repeat that?';
+
+async function askToRepeat() {
+  const i = presets.findIndex((p) => /\brepeat\b/i.test(p.en) && p.en.trim());
+  if (i >= 0) return playPreset(i);
+  try { playPhrase(REPEAT_EN, await toChinese(REPEAT_EN)); }
+  catch { toast('Translation failed – check internet'); }
+}
+
+// read the caller's own words back to them: "Did you say: …?"
+const CONFIRM_WRAP = {
+  'zh-CN': (zh) => `您是说：“${zh}”，对吗？`,
+  'zh-TW': (zh) => `您是說：「${zh}」，對嗎？`,
+  'yue':   (zh) => `你係咪話：「${zh}」？`,
+};
+function confirmLine(zh, en) {
+  const trim = (s) => s.replace(/[.。！？!?]+$/, '');
+  playPhrase(`Did you say: "${trim(en || zh)}"?`, CONFIRM_WRAP[settings.lang](trim(zh)));
 }
 
 // ---------- speech synthesis (English phrase -> Chinese audio) ----------
@@ -891,8 +924,57 @@ function showTab(name) {
 }
 document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => showTab(t.dataset.tab); });
 
+// ---------- dialogs: shortcuts list and first-time setup ----------
+const helpDialog = $('#helpDialog');
+const setupDialog = $('#setupDialog');
+const anyDialogOpen = () => helpDialog.open || setupDialog.open;
+
+$('#helpBtn').onclick = () => helpDialog.showModal();
+$('#helpClose').onclick = () => helpDialog.close();
+// click on the backdrop closes
+[helpDialog, setupDialog].forEach((d) => d.addEventListener('click', (e) => { if (e.target === d) d.close(); }));
+
+function setStep(id, state, note) {
+  const step = $('#' + id);
+  step.dataset.state = state; // '', 'done' or 'error'
+  if (note) step.querySelector('.step-note').textContent = note;
+}
+
+function openSetup() {
+  closeSettings();
+  const sl = $('#setupLang');
+  if (!sl.options.length) {
+    Object.entries(LANGS).forEach(([k, v]) => { const o = el('option', null, v.label); o.value = k; sl.appendChild(o); });
+    sl.onchange = () => { $('#langSelect').value = sl.value; $('#langSelect').onchange(); setStep('stepLang', 'done'); };
+  }
+  sl.value = settings.lang;
+  setupDialog.showModal();
+}
+
+$('#stepMicBtn').onclick = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach((t) => t.stop());
+    micBlocked = false;
+    setStep('stepMic', 'done', 'Microphone allowed.');
+  } catch {
+    setStep('stepMic', 'error', 'Blocked. Click the lock icon in the address bar, allow Microphone, then try again.');
+  }
+};
+$('#stepVoiceBtn').onclick = async () => {
+  const zh = await toChinese('Hello, this is a voice test.').catch(() => '你好，这是语音测试。');
+  await speak(zh, 'Voice test');
+  setStep('stepVoice', 'done', "Didn't hear it? Open Settings and try the Google online voice.");
+};
+const finishSetup = () => { store.set('setupDone', true); setupDialog.close(); };
+$('#setupDone').onclick = finishSetup;
+$('#setupSkip').onclick = finishSetup;
+setupDialog.addEventListener('cancel', () => store.set('setupDone', true));
+$('#rerunSetupBtn').onclick = openSetup;
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
+  if (anyDialogOpen()) return; // <dialog> handles its own Esc and focus
   if (e.key === 'Escape') {
     if (!$('#settingsPanel').hidden) closeSettings();
     else stopSpeaking();
@@ -900,8 +982,11 @@ document.addEventListener('keydown', (e) => {
   }
   const tag = document.activeElement?.tagName;
   if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
-  if (e.ctrlKey || e.altKey || e.metaKey) return;
+  if (e.ctrlKey || e.altKey || e.metaKey || !$('#settingsPanel').hidden) return;
   if (/^[1-9]$/.test(e.key) && !editingPresets) playPreset(Number(e.key) - 1);
+  else if (e.key === '?') helpDialog.showModal();
+  else if (e.key === 'l' || e.key === 'L') $('#listenBtn').click();
+  else if (e.key === '/') { e.preventDefault(); showTab('call'); quickEn.focus(); }
 });
 
 // ---------- boot ----------
@@ -921,6 +1006,9 @@ if (location.hash === '#demo') {
   showInterim('没问题，我今天下午发给您');
   interimEl.querySelector('.en').textContent = "No problem, I'll send it to you this afternoon";
 }
+
+// first visit: run the setup checks (not in demo mode or browsers that can't listen)
+if (SR && location.hash !== '#demo' && !store.get('setupDone', false)) openSetup();
 
 if (!SR) {
   banner('⚠ Speech recognition is not available in this browser. Open this page in <b>Google Chrome</b> or <b>Microsoft Edge</b>.');

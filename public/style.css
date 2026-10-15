@@ -432,6 +432,58 @@ body:not(.editing-presets) .edit-only { display: none; }
 .drawer-body .btn { align-self: flex-start; }
 .drawer-section { font-size: 12px; font-weight: 600; color: var(--muted); margin: 6px 0 -8px; }
 
+/* ---------- quick replies on caller lines ---------- */
+.line-actions { display: flex; gap: 6px; margin-top: 8px; opacity: 0; transition: opacity .15s; }
+.msg.them:hover .line-actions, .msg.them:focus-within .line-actions, .msg.them.latest .line-actions { opacity: 1; }
+@media (hover: none) { .line-actions { opacity: 1; } }
+.chip-btn {
+  min-height: 30px; padding: 3px 12px; border-radius: 999px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--line); background: var(--surface); color: var(--text-2);
+  transition: background .15s, border-color .15s, color .15s, transform .08s;
+}
+.chip-btn:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.chip-btn:active { transform: scale(.96); }
+@media (pointer: coarse) { .chip-btn { min-height: 40px; } }
+
+/* ---------- dialogs ---------- */
+.dialog {
+  width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  padding: 26px; border: 1px solid var(--line); border-radius: 18px;
+  background: var(--surface); color: var(--text); box-shadow: var(--shadow-pop);
+}
+.dialog[open] { animation: pop .2s var(--ease); }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.dialog::backdrop { background: var(--scrim); }
+.dialog h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -.015em; }
+.dialog-sub { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 22px; }
+
+.steps { list-style: none; margin: 20px 0 0; padding: 0; display: grid; gap: 10px; }
+.step {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 14px;
+  padding: 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
+  transition: border-color .2s, background .2s;
+}
+.step-mark {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+.step-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.step-body b { font-weight: 600; }
+.step-note { font-size: 13px; color: var(--muted); }
+.step-body select { min-width: 0; width: 100%; margin-top: 4px; }
+.step[data-state="done"] { border-color: var(--me-line); background: var(--me-soft); }
+.step[data-state="done"] .step-mark { background: var(--me); border-color: var(--me); color: #fff; font-size: 0; }
+.step[data-state="done"] .step-mark::before { content: "✓"; font-size: 14px; }
+.step[data-state="error"] { border-color: var(--danger-line); background: var(--danger-soft); }
+.step[data-state="error"] .step-note { color: var(--danger-text); }
+
+.shortcuts { display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; margin: 20px 0 0; align-items: center; }
+.shortcuts dt { white-space: nowrap; }
+.shortcuts dd { margin: 0; color: var(--text-2); }
+.shortcuts kbd { font-size: 12px; padding: 1px 7px; }
+#helpBtn { font-weight: 600; min-width: var(--tap); padding-inline: 0; }
+
 /* ---------- toast ---------- */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);

@@ -59,6 +59,7 @@
     </div>
 
     <div class="top-actions">
+      <button id="helpBtn" class="btn btn-ghost" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">?</button>
       <button id="settingsBtn" class="btn btn-ghost" aria-controls="settingsPanel" aria-expanded="false"><span aria-hidden="true">⚙</span><span class="label">Settings</span></button>
     </div>
   </header>
@@ -80,10 +81,10 @@
 
       <div id="transcript" class="transcript" tabindex="0" aria-label="Call transcript">
         <div id="emptyHint" class="empty">
-          <p><b>1.</b> Put the phone call on speaker next to your laptop.</p>
-          <p><b>2.</b> Click <b>Start listening</b> and allow microphone access.</p>
-          <p><b>3.</b> What they say appears here in English, live.</p>
-          <p><b>4.</b> Tap a phrase or type a reply below. It plays in Chinese through your laptop speaker.</p>
+          <p><b>1</b><span>Put the phone call on speaker next to your laptop.</span></p>
+          <p><b>2</b><span>Click <b>Start listening</b> and allow microphone access.</span></p>
+          <p><b>3</b><span>What they say appears here in English, live.</span></p>
+          <p><b>4</b><span>Tap a phrase or type a reply below. It plays in Chinese through your laptop speaker.</span></p>
         </div>
       </div>
 
@@ -178,8 +179,63 @@
         <span>Transcript text size <b id="fontVal"></b></span>
         <input id="fontInput" type="range" min="16" max="40" step="1" />
       </label>
+
+      <p class="drawer-section">Help</p>
+      <button id="rerunSetupBtn" class="btn">Run first-time setup again</button>
     </div>
   </aside>
+
+  <!-- first visit: get the mic, voice and language right before a real call -->
+  <dialog id="setupDialog" class="dialog" aria-labelledby="setupTitle">
+    <h2 id="setupTitle">Set up before your call</h2>
+    <p class="dialog-sub">Three quick checks so nothing surprises you on the call.</p>
+    <ol class="steps">
+      <li class="step" id="stepMic">
+        <span class="step-mark" aria-hidden="true">1</span>
+        <div class="step-body">
+          <b>Allow the microphone</b>
+          <span class="step-note" id="stepMicNote">The app listens to the caller through your laptop mic.</span>
+        </div>
+        <button class="btn" id="stepMicBtn">Allow</button>
+      </li>
+      <li class="step" id="stepVoice">
+        <span class="step-mark" aria-hidden="true">2</span>
+        <div class="step-body">
+          <b>Test the Chinese voice</b>
+          <span class="step-note" id="stepVoiceNote">Turn your volume up. You should hear a short sentence.</span>
+        </div>
+        <button class="btn" id="stepVoiceBtn">▶ Play</button>
+      </li>
+      <li class="step" id="stepLang">
+        <span class="step-mark" aria-hidden="true">3</span>
+        <div class="step-body">
+          <b>Pick the caller's language</b>
+          <select id="setupLang" aria-label="Caller's language"></select>
+        </div>
+      </li>
+    </ol>
+    <div class="dialog-actions">
+      <button class="btn btn-ghost" id="setupSkip">Skip</button>
+      <button class="btn btn-primary" id="setupDone">Done</button>
+    </div>
+  </dialog>
+
+  <dialog id="helpDialog" class="dialog" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">Keyboard shortcuts</h2>
+    <dl class="shortcuts">
+      <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Play a saved phrase</dd>
+      <dt><kbd>Esc</kbd></dt><dd>Stop playback</dd>
+      <dt><kbd>L</kbd></dt><dd>Start or stop listening</dd>
+      <dt><kbd>/</kbd></dt><dd>Jump to the reply box</dd>
+      <dt><kbd>Enter</kbd></dt><dd>Translate the reply (in the reply box)</dd>
+      <dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>Translate and play the reply</dd>
+      <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+    </dl>
+    <p class="dialog-sub">Number keys and letters work when you're not typing in a box.</p>
+    <div class="dialog-actions">
+      <button class="btn btn-primary" id="helpClose">Got it</button>
+    </div>
+  </dialog>
 
   <div id="srAnnounce" class="sr-only" aria-live="polite"></div>
   <div id="toast" class="toast" role="status"></div>
