@@ -2,16 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <!-- no-referrer lets the free Google online voice load from this page -->
   <meta name="referrer" content="no-referrer" />
   <title>Live Call Translator</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-tab="transcript">
+  <a class="skip-link" href="#transcript">Skip to transcript</a>
+
   <header class="topbar">
     <div class="brand">
-      <span class="logo">译</span>
+      <span class="logo" aria-hidden="true">译</span>
       <div>
         <h1>Live Call Translator</h1>
         <p class="sub">They speak Chinese → you read English · You type English → they hear Chinese</p>
@@ -23,47 +25,20 @@
         <span>Their language</span>
         <select id="langSelect"></select>
       </label>
-      <button id="listenBtn" class="btn btn-primary btn-lg">
-        <span class="dot"></span><span id="listenLabel">Start listening</span>
+      <button id="listenBtn" class="btn btn-primary btn-lg" aria-pressed="false">
+        <span class="dot" aria-hidden="true"></span><span id="listenLabel">Start listening</span>
       </button>
-      <button id="settingsBtn" class="btn btn-ghost" title="Voice settings">⚙ Settings</button>
+      <button id="settingsBtn" class="btn btn-ghost" aria-controls="settingsPanel" aria-expanded="false">⚙ Settings</button>
     </div>
   </header>
 
-  <div id="settingsPanel" class="settings hidden">
-    <label class="field">
-      <span>Voice engine</span>
-      <select id="engineSelect">
-        <option value="browser">Browser voice (offline-ish, pick below)</option>
-        <option value="google">Google online voice (free)</option>
-      </select>
-    </label>
-    <label class="field grow">
-      <span>Browser Chinese voice</span>
-      <select id="voiceSelect"></select>
-    </label>
-    <label class="field">
-      <span>Speed <b id="rateVal"></b></span>
-      <input id="rateInput" type="range" min="0.6" max="1.3" step="0.05" />
-    </label>
-    <label class="field">
-      <span>Transcript text size <b id="fontVal"></b></span>
-      <input id="fontInput" type="range" min="16" max="40" step="1" />
-    </label>
-    <label class="check">
-      <input id="muteChk" type="checkbox" />
-      <span>Pause mic while playing Chinese (prevents echo)</span>
-    </label>
-    <button id="testVoiceBtn" class="btn btn-ghost">▶ Test voice</button>
-  </div>
+  <div id="banner" class="banner hidden" role="alert"></div>
 
-  <div id="banner" class="banner hidden"></div>
-
-  <main class="layout">
+  <main class="layout" id="main">
     <!-- LEFT: live transcript -->
-    <section class="panel transcript-panel">
+    <section class="panel transcript-panel" aria-labelledby="transcriptTitle">
       <div class="panel-head">
-        <h2>Live transcript</h2>
+        <h2 id="transcriptTitle">Live transcript</h2>
         <div class="status-row">
           <span id="micStatus" class="pill">Mic off</span>
           <span id="trStatus" class="pill pill-muted">Translator: –</span>
@@ -75,12 +50,12 @@
         </div>
       </div>
 
-      <div id="transcript" class="transcript">
+      <div id="transcript" class="transcript" tabindex="0" aria-label="Call transcript">
         <div id="emptyHint" class="empty">
           <p><b>1.</b> Put the phone call on speaker next to your laptop.</p>
           <p><b>2.</b> Click <b>Start listening</b> and allow microphone access.</p>
           <p><b>3.</b> What they say appears here in English, live.</p>
-          <p><b>4.</b> Use the phrases on the right to answer. They play in Chinese through your laptop speaker.</p>
+          <p><b>4.</b> Use the phrases to answer. They play in Chinese through your laptop speaker.</p>
         </div>
       </div>
 
@@ -92,11 +67,12 @@
     </section>
 
     <!-- RIGHT: speak -->
-    <section class="panel speak-panel">
+    <section class="panel speak-panel" aria-labelledby="speakTitle">
       <div class="quick">
-        <div class="panel-head"><h2>Type &amp; speak</h2></div>
+        <div class="panel-head"><h2 id="speakTitle">Type &amp; speak</h2></div>
+        <label class="sr-only" for="quickEn">English to translate</label>
         <textarea id="quickEn" rows="2" placeholder="Type English here…  (Enter = translate, Ctrl+Enter = translate & play)"></textarea>
-        <div id="quickZh" class="zh-out" lang="zh" contenteditable="true" data-placeholder="Chinese translation appears here (you can edit it)"></div>
+        <div id="quickZh" class="zh-out" lang="zh" contenteditable="true" role="textbox" aria-label="Chinese translation (editable)" data-placeholder="Chinese translation appears here (you can edit it)"></div>
         <div id="quickBack" class="back"></div>
         <div class="row">
           <button id="quickTranslateBtn" class="btn btn-ghost">Translate</button>
@@ -111,7 +87,7 @@
         <div class="head-actions">
           <button id="addPresetBtn" class="btn btn-small btn-ghost">＋ Add</button>
           <button id="exportBtn" class="btn btn-small btn-ghost">Export</button>
-          <label class="btn btn-small btn-ghost">Import<input id="importInput" type="file" accept=".json" hidden /></label>
+          <label class="btn btn-small btn-ghost">Import<input id="importInput" type="file" accept=".json" class="sr-only" /></label>
         </div>
       </div>
       <p class="hint">Press keys <kbd>1</kbd>–<kbd>9</kbd> to play a phrase (when you're not typing). <kbd>Esc</kbd> stops playback.</p>
@@ -119,7 +95,47 @@
     </section>
   </main>
 
-  <div id="toast" class="toast"></div>
+  <nav class="tabbar" aria-label="Sections">
+    <button class="tab" data-tab="transcript" aria-pressed="true">Transcript</button>
+    <button class="tab" data-tab="speak" aria-pressed="false">Speak</button>
+  </nav>
+
+  <div id="scrim" class="scrim" hidden></div>
+  <aside id="settingsPanel" class="drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+    <div class="drawer-head">
+      <h2 id="settingsTitle">Settings</h2>
+      <button id="settingsClose" class="icon-btn" aria-label="Close settings">✕</button>
+    </div>
+    <div class="drawer-body">
+      <label class="field">
+        <span>Voice engine</span>
+        <select id="engineSelect">
+          <option value="browser">Browser voice (pick below)</option>
+          <option value="google">Google online voice (free)</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Browser Chinese voice</span>
+        <select id="voiceSelect"></select>
+      </label>
+      <label class="field">
+        <span>Speed <b id="rateVal"></b></span>
+        <input id="rateInput" type="range" min="0.6" max="1.3" step="0.05" />
+      </label>
+      <label class="field">
+        <span>Transcript text size <b id="fontVal"></b></span>
+        <input id="fontInput" type="range" min="16" max="40" step="1" />
+      </label>
+      <label class="check">
+        <input id="muteChk" type="checkbox" />
+        <span>Pause mic while playing Chinese (prevents echo)</span>
+      </label>
+      <button id="testVoiceBtn" class="btn btn-ghost">▶ Test voice</button>
+    </div>
+  </aside>
+
+  <div id="srAnnounce" class="sr-only" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status"></div>
 
   <script src="app.js"></script>
 </body>

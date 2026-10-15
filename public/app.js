@@ -59,6 +59,12 @@ function banner(msg) {
   b.innerHTML = msg;
   b.classList.toggle('hidden', !msg);
 }
+// read new caller lines to screen readers without re-reading the whole transcript
+function announce(msg) {
+  const a = $('#srAnnounce');
+  a.textContent = '';
+  setTimeout(() => { a.textContent = msg; }, 50);
+}
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -180,6 +186,7 @@ function setMicStatus() {
   else if (listening) { s.textContent = 'Starting mic…'; }
   else { s.textContent = 'Mic off'; }
   $('#listenBtn').classList.toggle('on', listening);
+  $('#listenBtn').setAttribute('aria-pressed', String(listening));
   $('#listenLabel').textContent = listening ? 'Stop listening' : 'Start listening';
 }
 
@@ -298,7 +305,11 @@ async function addTheirLine(zh) {
   hideInterim();
   const msg = addMessage('them', { zh });
   msg.setEnglish('translating…', true);
-  try { msg.setEnglish(await toEnglish(zh)); }
+  try {
+    const en = await toEnglish(zh);
+    msg.setEnglish(en);
+    announce('Caller: ' + en);
+  }
   catch (e) { msg.setEnglish('[translation failed – check internet]'); console.warn(e); }
 }
 
@@ -640,7 +651,9 @@ function initSettings() {
     if (quickEn.value.trim()) quickTranslate();
   };
 
-  $('#settingsBtn').onclick = () => $('#settingsPanel').classList.toggle('hidden');
+  $('#settingsBtn').onclick = openSettings;
+  $('#settingsClose').onclick = closeSettings;
+  $('#scrim').onclick = closeSettings;
 
   const eng = $('#engineSelect');
   eng.value = settings.engine;
@@ -672,9 +685,49 @@ function initSettings() {
   };
 }
 
+// ---------- settings drawer ----------
+let settingsReturnFocus = null;
+
+function openSettings() {
+  settingsReturnFocus = document.activeElement;
+  $('#settingsPanel').hidden = false;
+  $('#scrim').hidden = false;
+  $('#settingsBtn').setAttribute('aria-expanded', 'true');
+  $('#settingsClose').focus();
+}
+
+function closeSettings() {
+  if ($('#settingsPanel').hidden) return;
+  $('#settingsPanel').hidden = true;
+  $('#scrim').hidden = true;
+  $('#settingsBtn').setAttribute('aria-expanded', 'false');
+  settingsReturnFocus?.focus?.();
+}
+
+// keep Tab inside the open drawer
+$('#settingsPanel').addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  const items = [...$('#settingsPanel').querySelectorAll('button, select, input, [tabindex]:not([tabindex="-1"])')]
+    .filter((x) => !x.disabled);
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+// ---------- mobile tabs ----------
+function showTab(name) {
+  document.body.dataset.tab = name;
+  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-pressed', String(t.dataset.tab === name)));
+}
+document.querySelectorAll('.tab').forEach((t) => { t.onclick = () => showTab(t.dataset.tab); });
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { stopSpeaking(); return; }
+  if (e.key === 'Escape') {
+    if (!$('#settingsPanel').hidden) closeSettings();
+    else stopSpeaking();
+    return;
+  }
   const tag = document.activeElement?.tagName;
   if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || document.activeElement?.isContentEditable) return;
   if (e.ctrlKey || e.altKey || e.metaKey) return;
