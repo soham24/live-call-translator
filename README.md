@@ -28,7 +28,7 @@ It runs entirely in the browser using free services. There are no API keys, acco
 ## Run locally
 
 ```bash
-git clone https://github.com/<your-username>/live-call-translator.git
+git clone https://github.com/soham24/live-call-translator.git
 cd live-call-translator
 npm start
 ```
