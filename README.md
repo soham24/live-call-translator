@@ -46,7 +46,7 @@ The page has to be served over `http://localhost` or HTTPS. Browsers won't relia
 
 The app is a static site in `public/`, so any static host works.
 
-**Netlify:** `netlify.toml` already points at `public/`. Run `netlify deploy --prod`, or connect the repo in the Netlify dashboard.
+**Netlify:** `netlify.toml` already points at `public/`. The live demo is linked to this repo, so every push to `main` deploys automatically. For your own fork, connect the repo in the Netlify dashboard or run `netlify deploy --prod`.
 
 **GitHub Pages / Vercel / Cloudflare Pages:** set the publish directory to `public/`. No build command is needed.
 
